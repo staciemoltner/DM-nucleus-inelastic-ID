@@ -891,7 +891,7 @@ def IntSolidAngleFlux(g_chi, m_chi, nucleus, R_max, epsilon):
     df.to_csv(filename, sep='\t', index=False, mode='a') 
 
 
-def IntSolidAngleFluxALLMASSES(g_chi, R_max, epsilon):
+def IntSolidAngleFluxAllCOMasses(g_chi, R_max, epsilon):
     for m in allCOMasses:
         IntSolidAngleFlux(g_chi, m, 'C12', R_max, epsilon)
         IntSolidAngleFlux(g_chi, m, 'O16', R_max, epsilon)
