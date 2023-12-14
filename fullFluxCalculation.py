@@ -434,8 +434,8 @@ def Int_v_chi(m_chi, m_N, deltaE, r, v_n):
     v_i: nucleus velocity [km/s]
     r: radius from galactic centre [kpc]
     """
-    if m_chi < 0:
-        return 0
+    # if m_chi < 0:
+    #     return 0
     
     V_N = v_n / (c/1000) # convert from [km/s] to [unitless]
     if (deltaE - m_chi - (1/2) * m_N * V_N**2) < 0: # process is not possible
@@ -497,8 +497,8 @@ def Int_v_N(m_chi, m_N, deltaE, r):
     nucleus: scattering target
     r: [kpc] radius from galactic centre
     """
-    if m_chi > deltaE: # process not possible
-        return 0
+    # if m_chi > deltaE: # process not possible
+    #     return 0
 
     VBAR = v_circ(r) # [km/s]
     V_ESC = v_esc(r) # [km/s]
@@ -532,8 +532,8 @@ def Int_v_N(m_chi, m_N, deltaE, r):
 
 def plot_f_v_N(m_chi, m_N, deltaE):
     for r in [7, 8.5, 9, 10]:
-        if m_chi > deltaE: # process not possible
-            return 0
+        # if m_chi > deltaE: # process not possible
+        #     return 0
     
         VBAR = v_circ(r) # [km/s]
         V_ESC = v_esc(r) # [km/s]
@@ -590,8 +590,8 @@ def logInt_v_N(m_chi, m_N, deltaE, r):
     nucleus: scattering target
     r: [kpc] radius from galactic centre
     """
-    if m_chi > deltaE: # process not possible
-        return 0
+    # if m_chi > deltaE: # process not possible
+    #     return 0
 
     VBAR = v_circ(r) # [km/s]
     V_ESC = v_esc(r) # [km/s]
@@ -637,8 +637,8 @@ def Int_LOS(m_chi, nucleus, deltaE, b, l, R_max):
     """
     # nuc_info = {'He4': [3758.26, 0.0], 'C12': [11274.78, 0.0], 'N14': [13153.91, 0.0], 'O16': [15033.04, 0.0]}
     m_N = nuc_info[nucleus][0]
-    if m_chi > deltaE:
-        return 0
+    # if m_chi > deltaE:
+    #     return 0
     psi = np.arccos( np.cos(np.radians(b)) * np.cos(np.radians(l)) ) # [radians]
     s_max = (np.sqrt(R_max**2 - R_odot**2 * (np.sin(psi))**2) + R_odot * np.cos(psi)) # [kpc]
     
@@ -676,8 +676,8 @@ def logInt_LOS(s_min, m_chi, nucleus, deltaE, b, l, R_max):
     """
     # nuc_info = {'He4': [3758.26, 0.0], 'C12': [11274.78, 0.0], 'N14': [13153.91, 0.0], 'O16': [15033.04, 0.0]}
     m_N = nuc_info[nucleus][0]
-    if m_chi > deltaE:
-        return 0
+    # if m_chi > deltaE:
+    #     return 0
         
     psi = np.arccos( np.cos(np.radians(b)) * np.cos(np.radians(l)) ) # [radians]
     def f(s):
@@ -758,10 +758,23 @@ def flux_wConv(g_chi, m_chi, nucleus, b, l, R_max, epsilon, E):
     GT_sum = np.sum(GTs)
 
     for dE, GT in nucl_exc:
+        
+        if m_chi > dE:
+            flux_tot += 0
+            continue
+        
+        expTerm = np.exp(-(E - dE)**2 / (2 * epsilon**2 * dE**2))
+        if expTerm == 0:
+            flux_tot += 0
+            continue
+        
         Int = Int_LOS(m_chi, nucleus, dE, b, l, R_max) # [cm^-5]
-        R = (np.sqrt(2 * np.pi) * epsilon * dE)**(-1) * np.exp(-(E - dE)**2 / (2 * epsilon**2 * dE**2)) # [MeV^-1]
+        if Int == 0:
+            flux_tot += 0
+            continue
+            
+        R = (np.sqrt(2 * np.pi) * epsilon * dE)**(-1) * expTerm # [MeV^-1]
         dNdgamma = GT / GT_sum # branching ratio, [unitless]
-        # R = R_epsilon(epsilon, E, dE) # [MeV^-1]
         flux = ((1/24 * g_chi**2 * g_A**2 / (2*J_N + 1)) * (m_N + dE)/m_N * Int * dNdgamma * R * (c * 100) * (hbar * 1e-6 * c * 100)**2)
         fluxes.append(flux) # [MeV^-2 * cm^-5 * MeV^-1 * cm/s * cm^2 * MeV^2] = [cm^-2 s^-1 (sr^-1) MeV^-1]
         flux_tot += flux
@@ -823,17 +836,33 @@ def flux_CO(g_chi, m_chi, b, l, R_max, epsilon):
         fluxes_O16.append(flux_O16)
         fluxes_CO.append(flux_C12 + flux_O16)
 
+    metadata = "m_chi = {}, \n\
+# b [deg] = {}, l [deg] = {}, \n\
+# R_odot [kpc] = {}, \n\
+# R_max [kpc] = {} kpc, \n\
+# epsilon = {}, \n\
+# g_chi [MeV^-1] = {} \n\n".format(m_chi, b, l, R_odot, R_max, epsilon, g_chi)
+
+    with open('fluxData/C12/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), 'w') as fp1:
+        fp1.write(metadata)
     dat_C12 = {'Photon energy [MeV]': energy, 'C12 flux [cm^-2 s^-1 sr^-1 MeV^-1]': fluxes_C12}
     df_C12 = pd.DataFrame(dat_C12)
-    df_C12.to_csv('fluxData/C12/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), sep='\t', index=False)
+    df_C12.to_csv('fluxData/C12/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), \
+                  sep='\t', index=False, mode='a')
 
+    with open('fluxData/O16/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), 'w') as fp2:
+        fp2.write(metadata)
     dat_O16 = {'Photon energy [MeV]': energy, 'O16 flux [cm^-2 s^-1 sr^-1 MeV^-1]': fluxes_O16}
     df_O16 = pd.DataFrame(dat_O16)
-    df_O16.to_csv('fluxData/O16/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), sep='\t', index=False)
+    df_O16.to_csv('fluxData/O16/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), \
+                  sep='\t', index=False, mode='a')
     
+    with open('fluxData/CO/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), 'w') as fp3:
+        fp3.write(metadata)
     dat = {'Photon energy [MeV]': energy, 'CO flux [cm^-2 s^-1 sr^-2 MeV^-1]': fluxes_CO}
     df = pd.DataFrame(dat)
-    df.to_csv('fluxData/CO/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), sep='\t', index=False)
+    df.to_csv('fluxData/CO/mchi_{}MeV_b_{}deg_l_{}deg_Rmax_{}kpc_epsilon_{}.txt'.format(m_chi, b, l, R_max, 100*epsilon), \
+              sep='\t', index=False, mode='a')
     
     return fluxes_CO
 
@@ -847,7 +876,7 @@ def bIntegral(g_chi, m_chi, nucleus, l, R_max, epsilon, E):
     def f(b):
         integrand = np.sin(b * np.pi/180 + np.pi/2) * flux_wConv(g_chi, m_chi, nucleus, b, l, R_max, epsilon, E)
         return integrand 
-    bees = np.linspace(-5.25, 5.25, 22)
+    bees = np.linspace(-4.75, 4.75, 20)
     g = list(map(lambda bee: f(bee), bees))
     integral = cumtrapz(g, bees, initial=0)
     # integral1, err1 = quad(f, -5, 5, limit=10)
@@ -879,9 +908,10 @@ def IntSolidAngleFlux(g_chi, m_chi, nucleus, R_max, epsilon):
     filename = 'IntSolidAngleFluxData/{}/mchi_{}MeV_epsilon_{}.txt'.format(nucleus, m_chi, 100*epsilon)
     metadata = "# Integral 1 l bounds [deg] = [330.25, {}], \n\
 # Integral 2 l bounds [deg] = [{}, 29.75], \n\
-# b range [deg] = [-5.25, 5.25], \n\
+# b range [deg] = [-4.75, 4.75], \n\
 # R_odot [kpc] = {}, \n\
-# R_max [kpc] = {} kpc\n\n".format(ls[-1], ls[0], R_odot, R_max)
+# R_max [kpc] = {} kpc\n\
+# g_chi [MeV^-1] = {} \n\n".format(ls[-1], ls[0], R_odot, R_max, g_chi)
 
     with open(filename, 'w') as fp:
         fp.write(metadata)
@@ -901,5 +931,6 @@ def IntSolidAngleFluxAllCOMasses(g_chi, R_max, epsilon):
 
 
 if __name__=="__main__":
-    x = Int_v_chi(16.73, nuc_info['O16'][0], 16.732241, 16, 163.5)
-    print(x)
+    print("Hello")
+    fluxData(1, m_chis_C12[0], 'C12', bs[180], l_crval, 50.0, 0.05)
+#     #IntSolidAngleFlux(1, m_chis_C12[0], 'C12', 50.0, 0.05)
