@@ -1,0 +1,15 @@
+# b range [deg] = [-4.75, 4.75], 
+# R_odot [kpc] = 8.5, 
+# R_max [kpc] = 17.0 kpc
+# rho_s [GeV cm^-3] = 0.51# r_s [kpc] = 8.1
+# M_bulge [solar masses] = 2.9826148060470763e+40
+# c_bulge [kpc] = 0.6
+# M_disk [solar masses] = 1.3918869094886357e+41
+# b_disk [kpc] = 4
+# g_A = 1.27
+
+l [deg]	Differential flux [cm^-2 s^-1 MeV^-1 rad^-1]
+330.25	130436047.76484855
+359.75	153999975.31668052
+0.25	145824903.96036783
+29.75	143440631.6509992
