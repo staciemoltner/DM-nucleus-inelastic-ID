@@ -693,20 +693,22 @@ def b_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l, R_max, 
 
     def f(b):
         # b: [deg]
-        print("        b = {} deg".format(b))
+        #print("        b = {} deg".format(b))
         x = diff_flux_w_convolution_for_single_dE(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b, l, R_max, epsilon, E) # [unitless]
-        print("            differential flux [cm^-2 s^-1 MeV^-1 sr^-1]: {}".format(x * fluxFactor))
+        #print("            differential flux [cm^-2 s^-1 MeV^-1 sr^-1]: {}".format(x * fluxFactor))
         diffFlux.append(x * fluxFactor)
         integrand = np.sin(b * np.pi/180 + np.pi/2) * x  # [unitless]
         # sine argument accounts for transformation from GALPROP convention to standard solid angle convention
         return integrand # [unitless]
     bees = np.linspace(b_min, b_max, 20) # 20; testing: use 3
     g = list(map(lambda bee: f(bee), bees))
+    #tic = time.time()
     integral = cumtrapz(g, bees, initial=0) # [deg]
+    #print("        time for b integral: {}".format(time.time() - tic))
 
     #### write differential flux to file for each value of b ####
-    Path("data/differential_flux_data_by_dE/{}/{}MeV".format(nucleus, dE*energyScale)).mkdir(parents=True, exist_ok=True)
-    filename = 'data/differential_flux_data_by_dE/{}/{}MeV/m_chi_{}MeV_l_{}deg_epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, l, 100*epsilon)
+    Path("data/differential_flux_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_obs_{}MeV".format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale)).mkdir(parents=True, exist_ok=True)
+    filename = 'data/differential_flux_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_obs_{}MeV/l_{}deg_epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale, l, 100*epsilon)
     metadata = "# R_odot [kpc] = {}, \n\
 # R_max [kpc] = {} kpc\n\
 # rho_s [GeV cm^-3] = {}\n\
@@ -750,23 +752,27 @@ def l_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l_min1, l_
     bInt = []
     def f(l):
         # l: [deg]
-        print("    l = {} deg".format(l))
+        #print("    l = {} deg".format(l))
         integrand = b_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l, R_max, epsilon, E) # [rad]
         bInt.append(integrand * fluxFactor)
         return integrand
 
     ells1 = np.linspace(l_min1, l_max1, 60) # 60; testing: use 3
+    tic = time.time()
     g1 = list(map(lambda ell1: f(ell1), ells1))
     integral1 = cumtrapz(g1, ells1, initial=0) # [rad] * [deg]
+    print("        time for first l integral: {}".format(time.time() - tic))
 
     ells2 = np.linspace(l_min2, l_max2, 60) # 60; testing: use 3
+    tic = time.time()
     g2 = list(map(lambda ell2: f(ell2), ells2))
     integral2 = cumtrapz(g2, ells2, initial=0) # [rad] * [deg]
+    print("        time for second l integral: {}".format(time.time() - tic))
     # integral = integral1[-1] + integral2[-1]
 
     #### write differential flux (integrated over b) to file for each value of l ####
-    Path("data/b_integral_data_by_dE/{}/{}MeV".format(nucleus, dE*energyScale)).mkdir(parents=True, exist_ok=True)
-    filename = 'b_integral_data_by_dE/{}/{}MeV/m_chi_{}MeV_epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, 100*epsilon)
+    Path("data/b_integral_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_photon_{}MeV".format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale)).mkdir(parents=True, exist_ok=True)
+    filename = 'data/b_integral_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_photon_{}MeV/epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale, 100*epsilon)
     metadata = "# b range [deg] = [{}, {}], \n\
 # R_odot [kpc] = {}, \n\
 # R_max [kpc] = {} kpc\n\
@@ -819,20 +825,22 @@ def solid_angle_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, 
     integratedFlux = []
     
     for E in energy: # [unitless, in units of energyScale]
+        tic = time.time()
         print("    observed photon energy = {} MeV".format(E*energyScale))
         intFlux1, intFlux2 = l_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, \
                                         b_min, b_max, l_min1, l_max1, l_min2, l_max2, R_max, epsilon, E) # [rad * rad], [rad * rad]
         integratedFlux1.append(intFlux1 * fluxFactor) # [rad * rad] * [cm^-2 s^-1 MeV^-1 sr^-1] = [cm^-2 s^-1 MeV^-1]
         integratedFlux2.append(intFlux2 * fluxFactor) # [rad * rad] * [cm^-2 s^-1 MeV^-1 sr^-1] = [cm^-2 s^-1 MeV^-1]
         integratedFlux.append((intFlux1 + intFlux2) * fluxFactor) # [cm^-2 s^-1 MeV^-1]
+        print("    time for one obs photon energy: {}\n".format(time.time() - tic))
 
     #### calculate solid-angle-averaged-flux ####
     averagedFlux = [i / integratedSolidAngle for i in integratedFlux] # [cm^-2 s^-1 MeV^-1 sr^-1]
     ################
     
     #### write to file ####
-    Path("data/solid_angle_integral_data_by_dE/{}/{}MeV".format(nucleus, dE*energyScale)).mkdir(parents=True, exist_ok=True)
-    filename = 'data/solid_angle_integral_data_by_dE/{}/{}MeV/m_chi_{}MeV_epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, 100*epsilon)
+    Path("data/solid_angle_integral_data_by_dE/{}/dE_{}MeV".format(nucleus, dE*energyScale)).mkdir(parents=True, exist_ok=True)
+    filename = 'data/solid_angle_integral_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV_epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, 100*epsilon)
     metadata = "# Integral 1 l bounds [deg] = [{}, {}], \n\
 # Integral 2 l bounds [deg] = [{}, {}], \n\
 # b range [deg] = [{}, {}], \n\
@@ -852,8 +860,8 @@ def solid_angle_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, 
     ################
 
 
-# if __name__=="__main__":
-def main():
+if __name__=="__main__":
+#def main():
     nucleus = 'C12'
     g_chi = 1 # [MeV^-1]
     R_max = 50.0 # [kpc]
@@ -875,7 +883,7 @@ def main():
     ################
     
     print(nucleus)
-    for dE in nuc_dict[nucleus]['dEs [MeV]'][40:80:20]: # for now, only go to 80 for C12, 75 for O16
+    for dE in nuc_dict[nucleus]['dEs [MeV]'][5:80:10]: # for now, only go to 80 for C12, 75 for O16
         i = list(nuc_dict[nucleus]['dEs [MeV]']).index(dE)
         GT = nuc_dict[nucleus]['GTs'][i] # [unitless]
         print("i = {}:    dE = {} MeV, GT = {}".format(i, dE, GT))
@@ -889,6 +897,8 @@ def main():
 
         for m_chi in m_chis:
             print("    m_chi = {} MeV".format(m_chi))
+            tic = time.time()
             solid_angle_integral(g_chi*energyScale, m_chi/energyScale, nucleus, m_n, J_n, dE/energyScale, GT, b_min, b_max, l_min1, l_max1, l_min2, l_max2, integratedSolidAngle, R_max/r_s, epsilon)
+            print("    time for 1 mass: {}".format(time.time() - tic))
 
-main()
+#main()
