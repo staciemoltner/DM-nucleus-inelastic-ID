@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Jan 2
+# # last update: Jan 9
 
 import os, sys
 import numpy as np
@@ -21,13 +21,12 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from astropy import constants as ct
 from astropy import units as u
-# from spectral_cube import SpectralCube
 import bisect
 import time
 from pathlib import Path
 
 
-# # constants & data import
+# ################ constants & data import ################
 
 # constants
 g_A = 1.27 # [unitless] axial form factor
@@ -56,7 +55,7 @@ nuc_dict = {'C12': {'mass [MeV]': 11274.78, 'mass [unitless]': 11274.78/energySc
 # 'N14': {'mass_MeV': 13153.91, 'mass [unitless]': 13153.91/energyScale, 'spin': 0.0}
 
 
-# # GALPROP density data
+# ################ GALPROP density data ################
 
 # galprop manual: 
 # - https://galprop.stanford.edu/download/manuals/galprop_v54.pdf
@@ -72,9 +71,17 @@ def print_density_header():
     prints header for CO density data
     """
     return hdul_CO[0].header # .fits file header
-    # return hdul_CO[1].data # radial bins
+
+
+def print_radial_bins():
+    """
+    prints radial bins for CO density data
+    """
+    return hdul_CO[1].data # radial bins
+
 
 # print_density_header()
+# print_radial_bins()
 
 
 # density data
@@ -89,10 +96,12 @@ density data: hdul_CO[0].data[r bin index, b index, l index]
 """
 density_data = hdul_CO[0].data # [kg/cm^3]
 density_data_unitless = density_data / ((rho_s * u.GeV * (1/u.cm)**3).to_value(u.kg * (1/u.cm)**3, u.mass_energy())) # [unitless, in units of rho_s]
+# to convert x from unitless density to units of [GeV/cm^3]: x * (rho_s * u.GeV * (1/u.cm)**3).to_value()
+# to convert x from unitless density to units of [kg/cm^3]: x * (rho_s * u.GeV * (1/u.cm)**3).to_value(u.kg * (1/u.cm)**3, u.mass_energy())
 
 bins = hdul_CO[1].data # [kpc] radial bin boundaries
-r_bins = [bins[0][0]] # r bin smallest value
-r_unitless_bins = [bins[0][0] / r_s] # r bin smallest value
+r_bins = [bins[0][0]] # [kpc] r bin smallest value
+r_unitless_bins = [bins[0][0] / r_s] # [unitless] r bin smallest value
 for i, j in bins: # creating r bins from GALPROP increments
     r_bins.append(j)
     r_unitless_bins.append(j / r_s)
@@ -100,36 +109,19 @@ for i, j in bins: # creating r bins from GALPROP increments
 # r_unitless_bins
 
 
-# density_data[4]
+# density_data_unitless[4] # [unitless, in units of rho_s]
+
+
+# density_data[4] # [kg/cm^3]
 
 
 # creating b and l arrays
 b_len, l_len = hdul_CO[0].header['NAXIS2'], hdul_CO[0].header['NAXIS1'] # length of b, l arrays
-b_crval, l_crval = hdul_CO[0].header['CRVAL2'], hdul_CO[0].header['CRVAL1'] # [deg], [deg]; central values of b,l
+b_crval, l_crval = hdul_CO[0].header['CRVAL2'], hdul_CO[0].header['CRVAL1'] # [deg], [deg]; values of b,l at reference point CRPIX2, CRPIX1
 b_delta, l_delta = hdul_CO[0].header['CDELT2'], hdul_CO[0].header['CDELT1'] # [deg], [deg]; increments for b, l
 
-bs = list(np.arange(b_crval, b_crval + b_len*b_delta, b_delta)) # [deg]
-ls = list(np.arange(l_crval, l_crval + l_len*l_delta, l_delta)) # [deg]
-
-
-# def plot_CO_density(r, save):
-#     """
-#     plots CO density for radial bin corresponding to galactocentric radius r
-#     ****************
-#     r: [kpc] galactocentric radius
-#     """
-#     r_index = bisect.bisect(r_bins, r) - 1 # find radial bin index
-#     fig = plt.figure(figsize = (10,15))
-#     ax = plt.axes()
-#     im = ax.imshow(density_data[r_index], cmap='magma', norm=matplotlib.colors.LogNorm())
-#     X, Y = 0.02, 0.04
-#     cax = fig.add_axes([ax.get_position().x1 + X, ax.get_position().y0, Y, ax.get_position().height])
-#     if save: 
-#         plt.savefig('plots/CO_density_r_bin_{}'.format(r_index), bbox_inches="tight")
-#     plt.xlabel('Galactic longitude')
-#     plt.colorbar(im, cax=cax)
-
-# plot_CO_density(9, False)
+bs = list(np.arange(b_crval, b_crval + b_len*b_delta, b_delta)) # [deg]; list of bs
+ls = list(np.arange(l_crval, l_crval + l_len*l_delta, l_delta)) # [deg]; list of ls
 
 
 def plot_CO_density(r, save):
@@ -137,9 +129,10 @@ def plot_CO_density(r, save):
     plots CO density for radial bin corresponding to galactocentric radius r
     ****************
     r: [kpc] galactocentric radius
+    save: True or False; saves figure as pdf
     """
     r_index = bisect.bisect(r_bins, r) - 1 # find radial bin index
-    fig = plt.figure(figsize=(10,5))
+    fig = plt.figure(figsize=(12,5))
 
     wcs = WCS(hdul_CO[0].header)
     wcs_2d = wcs[r_index, :, :]
@@ -161,10 +154,7 @@ def plot_CO_density(r, save):
 # plot_CO_density(8.5, False)
 
 
-
-
-
-# # rotation curve from Clemens (1985)
+# ################ rotation curve from Clemens (1985) ################
 
 # https://articles.adsabs.harvard.edu/pdf/1985ApJ...295..422C
 R_0, theta_0 = R_odot, 220 # [kpc], [km/s]
@@ -202,33 +192,39 @@ v_rot_unitless = [v / (ct.c.to_value(u.km / u.s)) for v in v_rot] # [unitless, i
 v_circ_unitless = interp1d(r_rot_unitless, v_rot_unitless, fill_value='extrapolate') # [unitless, in units of c]
 
 
-def plot_rotation_curves():
+def plot_rotation_curves_vs_radius(save):
     """
     plots rotation curves from Clemens 1985, used for circular baryon velocity
+    ****************
+    save: True or False; saves figure as pdf
     """
     plt.figure(figsize=(12, 8))
     plt.grid(which = 'both', linestyle = 'dotted')
     plt.xlim(-1, D_R[-1]); plt.ylim(0, 275)
     plt.xlabel('Radius from galactic centre [kpc]', fontsize=14)
     plt.ylabel('Rotation speed [km/s]', fontsize=14)
-    plt.plot(A_R, theta_A)
-    plt.plot(B_R, theta_B)
-    plt.plot(C_R, theta_C)
-    plt.plot(D_R, theta_D)
+    plt.plot(A_R, theta_A, label='{} kpc < R < {} kpc'.format(R_i[0], R_i[1]))
+    plt.plot(B_R, theta_B, label='{} kpc < R < {} kpc'.format(R_i[1], R_i[2]))
+    plt.plot(C_R, theta_C, label='{} kpc < R < {:0.3} kpc'.format(R_i[2], R_i[3]))
+    plt.plot(D_R, theta_D, label='{} kpc < R'.format(R_i[4]))
     plt.plot(r_rot, v_rot, color = 'black', linestyle = 'dashed')
+    plt.legend(fontsize=14)
 
-# plot_rotation_curves()
+    if save: 
+        plt.savefig('plots/rotation_curves_vs_radius.pdf'.format(r, r_index), bbox_inches="tight")
+
+# plot_rotation_curves_vs_radius(False)
 
 
-# # radius & maximum line of sight distance
+# ################ radius & maximum line of sight distance ################
 
-
-def plot_radius_vs_los(b, R_max):
+def plot_radius_vs_los(b, R_max, save):
     """
     plots galactic radius as a function of line of sight
     ****************
     b: [deg] galactic latitude
     R_max: [kpc] maximum galactic radius
+    save: True or False; saves figure as pdf
     """
     # R_max = 50.0 # [kpc]
     plt.figure(figsize = (12, 8))
@@ -247,11 +243,13 @@ def plot_radius_vs_los(b, R_max):
     plt.legend(fontsize=14)
     plt.title('radial coordinate as function of line of sight', fontsize = 20)
 
-# plot_radius_vs_los(b = 0, R_max = 50.0)
+    if save: 
+        plt.savefig('plots/radius_vs_los.pdf'.format(r, r_index), bbox_inches="tight")
+
+# plot_radius_vs_los(b = 0, R_max = 50.0, save = False)
 
 
-# # density calculation & interpolation for DM and baryons
-
+# ################ density calculation & interpolation for DM and baryons ################
 
 # to convert x from kg/cm^3 to GeV/cm^3: x * (u.kg * (1/u.cm)**3).to_value(u.GeV * (1/u.cm)**3, u.mass_energy())
 
@@ -277,7 +275,7 @@ def density(nucleus, r, b, l):
     l: [degrees] galactic longitude
     """
     r_index = bisect.bisect(r_bins, r) - 1 # find radial bin index
-    rho_DM = rho_s / ( (r/r_s) * (1 + r/r_s)**2 ) # [GeV/cm^3]
+    rho_DM = rho_s / ( (r/r_s) * (1 + r/r_s)**2 ) # [GeV/cm^3]; NFW profile
     if r >= r_bins[-1]: # if radius is beyond what is provided by GALPROP, return zero for baryon density
         rho_b = 0
         return(rho_b, rho_DM) # ([GeV/cm^3], [GeV/cm^3])
@@ -298,7 +296,7 @@ def density_unitless(nucleus, r, b, l):
     """
     r_unitless_index = bisect.bisect(r_unitless_bins, r) - 1 # find unitless radial bin index
     # print(r_unitless_index)
-    rho_DM = 1 / ( (r) * (1 + r)**2 ) # [unitless]
+    rho_DM = 1 / ( (r) * (1 + r)**2 ) # [unitless]; NFW profile
     # print(rho_DM * (rho_s * u.GeV * (1/u.cm)**3).to_value())
     if r >= r_unitless_bins[-1]: # if radius is beyond what is provided by GALPROP, return zero for baryon density
         rho_b = 0
@@ -306,15 +304,16 @@ def density_unitless(nucleus, r, b, l):
 
     rho_b = (nuc_dict[nucleus]['mass [unitless]'] / (nuc_dict['C12']['mass [unitless]'] + nuc_dict['O16']['mass [unitless]']) \
              * density_unitless_interpolator[r_unitless_index](np.array([b, l])))[0]
-    return (rho_b, rho_DM)
+    return (rho_b, rho_DM) # ([unitless, in units of rho_s], [unitless, in units of rho_s])
         
 
-def plot_DM_density_vs_los(nucleus, b):
+def plot_DM_density_vs_los(nucleus, b, save):
     """
-    plots DM density as function of line of sight
+    plots DM density as a function of line of sight
     ****************
     nucleus: 'C12' or 'O16'
     b: [deg] galactic latitude
+    save: True or False; saves figure as pdf
     """
     R_max = 40.0
     plt.figure(figsize = (12, 8))
@@ -331,17 +330,21 @@ def plot_DM_density_vs_los(nucleus, b):
         plt.plot(esses, rho_DM, label="(l, b) = ({}$^\circ$, {}$^\circ$)".format(l, b))
     plt.plot()
     plt.legend()
-    plt.title('dm density as function of line of sight', fontsize = 24)
+    plt.title('dm density as a function of line of sight', fontsize = 24)
 
-# plot_DM_density_vs_los(nucleus = 'C12', b = 0.25)
+    if save: 
+        plt.savefig('plots/DM_density_vs_los.pdf'.format(r, r_index), bbox_inches="tight")
+
+# plot_DM_density_vs_los(nucleus = 'C12', b = 0.25, save = False)
 
 
-def plot_baryon_density_vs_los(nucleus, b):
+def plot_baryon_density_vs_los(nucleus, b, save):
     """
-    plots baryon density as function of line of sight
+    plots baryon density as a function of line of sight
     ****************
     nucleus: 'C12' or 'O16'
     b: [deg] galactic latitude
+    save: True or False; saves figure as pdf
     """
     R_max = 50.0
     fig, ax1 = plt.subplots(figsize = (12, 8))
@@ -362,17 +365,21 @@ def plot_baryon_density_vs_los(nucleus, b):
         ax1.plot(esses, rho_b_kg, label="(l, b) = ({}$^\circ$, {}$^\circ$)".format(l, b))
     plt.plot()
     ax1.legend()
-    plt.title('dm density as function of line of sight', fontsize = 24)
+    plt.title('baryon density as a function of line of sight', fontsize = 24)
 
-# plot_baryon_density_vs_los(nucleus = 'C12', b = 0)
+    if save: 
+        plt.savefig('plots/baryon_density_vs_los.pdf'.format(r, r_index), bbox_inches="tight")
+
+# plot_baryon_density_vs_los(nucleus = 'C12', b = 0, save = False)
 
 
-def plot_baryon_density_vs_radius(nucleus, b):
+def plot_baryon_density_vs_radius(nucleus, b, save):
     """
     plots baryon density as function of radius from galactic centre
     ****************
     nucleus: 'C12' or 'O16'
     b: [deg] galactic latitude
+    save: True or False; saves figure as pdf
     """
     R_max = 50.0
     fig, ax1 = plt.subplots(figsize = (12, 8))
@@ -391,47 +398,32 @@ def plot_baryon_density_vs_radius(nucleus, b):
         ax1.legend()
     
     fig.tight_layout()  # otherwise the right y-label is slightly clipped
-    plt.title('baryon density as function of radius from GC', fontsize = 24);
+    plt.title('baryon density as a function of radius from GC', fontsize = 24)
 
-# plot_baryon_density_vs_radius(nucleus = 'C12', b = 0.25)
+    if save: 
+        plt.savefig('plots/baryon_density_vs_radius.pdf'.format(r, r_index), bbox_inches="tight")
+
+# plot_baryon_density_vs_radius(nucleus = 'C12', b = 0.25, save = False)
 
 
-# # velocity dispersions $\sigma(r, \psi)$
+# ################ velocity dispersions ################
 
 def velocity_dispersions_unitless(r):
     """
-    returns: [unitless, in units of c] (baryon velocity dispersion, DM velocity dispersion)
+    returns: ([unitless, in units of c], [unitless, in units of c]) (baryon velocity dispersion, DM velocity dispersion)
     ****************
     r: [unitless, in units of r_s] radius from galactic centre 
     ****************
-    DM dispersion function taken from 2111.03076 Figure 1 for r <~ 50 kpc using automeris.io (Distance 76, Delta X = 4 Px, Delta Y = 4 Px)
+    baryon dispersion function taken from 1707.00743 Figure 11 top right (orange circles) using automeris.io (data points selected manually)
+    DM dispersion function taken from 2111.03076 Figure 1 upper right for r <~ 50 kpc using automeris.io (Distance 76, Delta X = 4 Px, Delta Y = 4 Px)
     """
-    disp_b = 10 / (ct.c.to_value(u.km / u.s)) # [unitless, in units of c]
-    disp_DM = (-42.9 * np.log(r) + 288.0) / (ct.c.to_value(u.km / u.s)) # [unitless, in units of c]
+    disp_b = np.sqrt(3) * (-2.0 * np.log(r) + 3.3) / (ct.c.to_value(u.km / u.s)) # [unitless, in units of c]
+    disp_DM = (-43 * np.log(r) + 288) / (ct.c.to_value(u.km / u.s)) # [unitless, in units of c]
 
-    return (disp_b, disp_DM)
+    return (disp_b, disp_DM) # ([unitless, in units of c], [unitless, in units of c])
         
 
-
-def plot_escape_velocity():
-    """
-    plots escape velocity as function of radius from galactic centre
-    ****************
-    """
-    plt.figure(figsize=(8, 6))
-    plt.grid(which = 'both', linestyle = 'dotted')
-    arrs = np.arange(r_rot[0], r_rot[-1], dr)
-    plt.xlim(-1, r_rot[-1]); plt.ylim(np.sqrt(2) * v_circ_unitless(arrs[0]/r_s) * ct.c.to_value(u.km / u.s), np.sqrt(2) * 275)
-    plt.xlabel('Radius from galactic centre [kpc]', fontsize=14)
-    plt.ylabel('Escape velocity [km/s]', fontsize=14)
-    plt.plot(arrs, list(map(lambda r: np.sqrt(2) * v_circ_unitless(r/r_s) * ct.c.to_value(u.km / u.s), arrs)), color='black', label='escape velocity')
-    plt.plot(r_rot, v_rot, color='black', linestyle='dashed', label='rotation curve')
-    plt.legend()
-    
-# plot_escape_velocity()
-
-
-# # $v_\chi$ integral
+# ################ DM velocity integral ################
 
 def norm_chi(sigma_chi, V_ESC):
     """
@@ -444,7 +436,7 @@ def norm_chi(sigma_chi, V_ESC):
     norm = (2 * np.pi * sigma_chi**2)**(-3/2) * (4 * np.pi) \
     * ( np.sqrt(np.pi / 2) * sigma_chi**3 * scipy.special.erf(V_ESC / (np.sqrt(2) * sigma_chi) ) \
        - sigma_chi**2 * V_ESC * np.exp(- V_ESC**2 / (2 * sigma_chi**2)))
-    return norm
+    return norm # [unitless]
 
 
 def v_chi_integral(m_chi, m_n, dE, r, sigma_chi, V_ESC, v_n):
@@ -475,17 +467,17 @@ def v_chi_integral(m_chi, m_n, dE, r, sigma_chi, V_ESC, v_n):
         print("something has gone wrong!")
         return
 
-    return ( (1 / norm) * (1 / E_chi) * v_chi_plus * np.exp(-v_chi_plus**2 / (2 * sigma_chi**2)) ) # [unitless]
+    return ( (1 / norm) * (1 / E_chi) * v_chi_plus * np.exp(-(v_chi_plus**2) / (2 * sigma_chi**2)) ) # [unitless]
 
 vchiIntegralFactor = (ct.c.to_value(u.km / u.s))/energyScale
 # vchiIntegralFactor
 
 
-# # $v_n$ integral
+# ################ baryon velocity integral ################
 
 def v_n_integral_bounds(m_chi, m_n, dE, V_ESC):
     """
-    returns: [unitless, in units of c] min and max bounds on v_n for baryon distribution function integral
+    returns: ([unitless, in units of c], [unitless, in units of c]) min and max bounds on v_n for baryon distribution function integral
     ****************
     m_chi: [unitless, in units of energyScale] DM mass
     m_n: [unitless, in units of energyScale] nucleus mass
@@ -519,7 +511,7 @@ def norm_n(sigma_b, VBAR, V_ESC):
                         - np.sqrt(2 * np.pi) * (VBAR**2 + sigma_b**2) * scipy.special.erf((VBAR - V_ESC) / (np.sqrt(2) * sigma_b)) \
                         + 2 * sigma_b * VBAR * np.exp(- VBAR**2 / (2 * sigma_b**2)) \
                         - 2 * sigma_b * (VBAR + V_ESC) * np.exp(- (VBAR - V_ESC)**2 / (2 * sigma_b**2)) )
-    return norm
+    return norm # [unitless]
 
 
 def v_n_integral(m_chi, m_n, dE, r, sigma_b, sigma_chi):
@@ -564,7 +556,7 @@ vnIntegralFactor = vchiIntegralFactor * energyScale**(-1) * ct.c.to_value(u.km/u
 # vnIntegralFactor
 
 
-# # line of sight integral
+# ################ line of sight integral ################
 
 def line_of_sight_integral(m_chi, nucleus, m_n, dE, b, l, R_max):
     """
@@ -611,15 +603,14 @@ losIntegralFactor = (rho_s * rho_s * ct.c.to_value(u.km/u.s)**(-6)) * vnIntegral
 # losIntegralFactor
 
 
-# # flux
+# ################ differential flux ################
 
-def diff_flux_w_convolution_for_single_dE(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b, l, R_max, epsilon, E):
+def diff_flux_for_single_dE(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b, l, R_max):
     """
-    returns: [unitless] differential flux;
-    to get unitful dimensions [cm^-2 s^-1 MeV^-1 sr^-1] multiply by fluxFactor:
+    returns: [unitless] differential flux with NO convolution;
+    to get unitful dimensions [cm^-2 s^-1 MeV^-1 sr^-1] multiply by fluxFactorNoConv:
         ( 1/energyScale * 1/energyScale \
          * losIntegralFactor \
-         * 1/energyScale \
          * (ct.c.to_value(u.cm/u.s)) * (ct.hbar.to_value(u.MeV * u.s) * ct.c.to_value(u.cm/u.s))**2 )
     ****************
     g_chi: [unitless, in units of 1/energyScale] DM-nucleus coupling constant
@@ -632,46 +623,37 @@ def diff_flux_w_convolution_for_single_dE(g_chi, m_chi, nucleus, m_n, J_n, dE, G
     b: [deg] galactic latitude
     l: [deg] galactic longitude
     R_max: [unitless, in units of r_s] maximum galactic radius
-    epsilon: [unitless] energy resolution
-    E: [unitless, in units of energyScale] observed photon energy
     """
     fluxes, flux_tot = [], 0
     
     # do some checks to save time:
     if m_chi > dE:
-        print("m_chi > dE")
+        # print("m_chi > dE")
         # flux_tot = 0
         return flux_tot
-    
-    expTerm = np.exp(-(E - dE)**2 / (2 * epsilon**2 * dE**2))
-    if expTerm == 0:
-        print("expTerm == 0")
-        # flux_tot = 0
-        return flux_tot
-    
+
     los_integral = line_of_sight_integral(m_chi, nucleus, m_n, dE, b, l, R_max) # [unitless] 
     # multiply los_integral by losIntegralFactor to get [cm^-5]
     if los_integral == 0:
-        print("los == 0")
+        # print("los == 0")
         # flux_tot = 0
         return flux_tot
 
-    R = (np.sqrt(2 * np.pi) * epsilon * dE)**(-1) * expTerm # [unitless], needs to be multiplied by 1/energyScale to get [MeV^-1]
-    flux = ((1/24 * g_chi * g_chi * g_A * g_A / (2*J_n + 1)) * (m_n + dE)/m_n * los_integral * GT * R) # [unitless]
+    flux = ((1/24 * g_chi * g_chi * g_A * g_A / (2*J_n + 1)) * (m_n + dE)/m_n * los_integral * GT) # [unitless]
     fluxes.append(flux)
     flux_tot += flux
-
+    # print("flux = {}".format(flux_tot))
     return flux_tot # [unitless]
 
 
-fluxFactor = ( 1/energyScale * 1/energyScale \
+fluxFactorNoConv = ( 1/energyScale * 1/energyScale \
               * losIntegralFactor \
-              * 1/energyScale \
               * (ct.c.to_value(u.cm/u.s)) * (ct.hbar.to_value(u.MeV * u.s) * ct.c.to_value(u.cm/u.s))**2 )
-# fluxFactor
+# fluxFactorNoConv
+# note extra factor of MeV^-1 comes from delta function of dN/dE_gamma
 
 
-def b_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l, R_max, epsilon, E):
+def write_diff_flux_to_file(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l_min1, l_max1, l_min2, l_max2, R_max):
     """
     returns: [unitless * rad] differential flux integrated over galactic latitude from b_min to b_max
     ****************
@@ -684,206 +666,67 @@ def b_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l, R_max, 
     GT: [unitless] GT strength for excitation energy dE
     b_min: [deg] lower integral bound for galactic latitude
     b_max: [deg] upper integral bound for galactic latitude
-    l: [deg] galactic longitude
-    R_max: [unitless, in units of r_s] maximum galactic radius
-    epsilon: [unitless] energy resolution
-    E: [unitless, in units of energyScale] observed photon energy
-    """
-    diffFlux = []
-
-    def f(b):
-        # b: [deg]
-        #print("        b = {} deg".format(b))
-        x = diff_flux_w_convolution_for_single_dE(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b, l, R_max, epsilon, E) # [unitless]
-        #print("            differential flux [cm^-2 s^-1 MeV^-1 sr^-1]: {}".format(x * fluxFactor))
-        diffFlux.append(x * fluxFactor)
-        integrand = np.sin(b * np.pi/180 + np.pi/2) * x  # [unitless]
-        # sine argument accounts for transformation from GALPROP convention to standard solid angle convention
-        return integrand # [unitless]
-    bees = np.linspace(b_min, b_max, 20) # 20; testing: use 3
-    g = list(map(lambda bee: f(bee), bees))
-    #tic = time.time()
-    integral = cumtrapz(g, bees, initial=0) # [deg]
-    #print("        time for b integral: {}".format(time.time() - tic))
-
-    #### write differential flux to file for each value of b ####
-    Path("data/differential_flux_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_obs_{}MeV".format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale)).mkdir(parents=True, exist_ok=True)
-    filename = 'data/differential_flux_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_obs_{}MeV/l_{}deg_epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale, l, 100*epsilon)
-    metadata = "# R_odot [kpc] = {}, \n\
-# R_max [kpc] = {} kpc\n\
-# rho_s [GeV cm^-3] = {}\n\
-# r_s [kpc] = {}\n\
-# g_chi [MeV^-1] = {}\n\
-# g_A = {}\n\
-# GT = {}\n#\n".format(R_odot, R_max*r_s, rho_s, r_s, g_chi/energyScale, g_A, GT)
-    with open(filename, 'w') as fp:
-        fp.write(metadata)
-    dat = {'b [deg]': bees, 'Differential flux [cm^-2 s^-1 MeV^-1 sr^-1]': diffFlux}
-    df = pd.DataFrame(dat)
-    df.to_csv(filename, sep='\t', index=False, mode='a')
-    ################
-    
-    return integral[-1] * np.pi/180 # [deg] -> [rad]
-
-
-def l_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l_min1, l_max1, l_min2, l_max2, R_max, epsilon, E):
-    """
-    returns: [unitless * rad * rad] (flux1, flux2) integrated over galactic latitude from b_min to b_max, and:
-        flux1: galactic longitude from l_min1 to l_max1
-        flux2: galactic longitude from l_min2 to l_max2 
-    ****************
-    g_chi: [unitless, in units of 1/energyScale] DM-nucleus coupling constant
-    m_chi: [unitless, in units of energyScale] DM mass
-    nucleus: 'C12' or 'O16'
-    m_n: [unitless, in units of energyScale] nucleus mass
-    J_n: [unitless] nucleus spin
-    dE: [unitless, in units of energyScale] excitation energy
-    GT: [unitless] GT strength for excitation energy dE
-    b_min: [deg] lower integral bound for galactic latitude
-    b_max: [deg] upper integral bound for galactic latitude
     l_min1: [deg] lower bound for first galactic longitude integral
     l_max1: [deg] upper bound for first galactic longitude integral
     l_min2: [deg] lower bound for second galactic longitude integral
     l_max2: [deg] upper bound for second galactic longitude integral
     R_max: [unitless, in units of r_s] maximum galactic radius
-    epsilon: [unitless] energy resolution
-    E: [unitless, in units of energyScale] observed photon energy
     """
-    bInt = []
-    def f(l):
-        # l: [deg]
-        #print("    l = {} deg".format(l))
-        integrand = b_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l, R_max, epsilon, E) # [rad]
-        bInt.append(integrand * fluxFactor)
-        return integrand
-
     ells1 = np.linspace(l_min1, l_max1, 60) # 60; testing: use 3
-    tic = time.time()
-    g1 = list(map(lambda ell1: f(ell1), ells1))
-    integral1 = cumtrapz(g1, ells1, initial=0) # [rad] * [deg]
-    print("        time for first l integral: {}".format(time.time() - tic))
-
     ells2 = np.linspace(l_min2, l_max2, 60) # 60; testing: use 3
-    tic = time.time()
-    g2 = list(map(lambda ell2: f(ell2), ells2))
-    integral2 = cumtrapz(g2, ells2, initial=0) # [rad] * [deg]
-    print("        time for second l integral: {}".format(time.time() - tic))
-    # integral = integral1[-1] + integral2[-1]
-
-    #### write differential flux (integrated over b) to file for each value of l ####
-    Path("data/b_integral_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_photon_{}MeV".format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale)).mkdir(parents=True, exist_ok=True)
-    filename = 'data/b_integral_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/E_photon_{}MeV/epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, E*energyScale, 100*epsilon)
-    metadata = "# b range [deg] = [{}, {}], \n\
+    bees = np.linspace(b_min, b_max, 20) # 20; testing: use 3
+    
+    for l in [*ells1, *ells2]:
+        # print("l = {} deg".format(l))
+        diffFluxNoConv = []
+        for b in bees:
+            # print("    b = {} deg".format(b))
+            x = diff_flux_for_single_dE(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b, l, R_max) # [unitless]
+            diffFluxNoConv.append(x * fluxFactorNoConv)
+            # print("            differential flux [cm^-2 s^-1 MeV^-1 sr^-1]: {}".format(x * fluxFactorNoConv))
+        #### write differential flux to file for each value of b ####
+        Path("data_no_conv/differential_flux_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV".format(nucleus, dE*energyScale, m_chi*energyScale)).mkdir(parents=True, exist_ok=True)
+        filename = 'data_no_conv/differential_flux_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV/l_{}deg.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, l)
+        metadata = "# m_chi = {} MeV, \n\
+# nucleus = {}, \n\
+# m_n = {} MeV, \n\
+# J_n = {}, \n\
+# dE = {} MeV, \n\
+# GT = {}, \n\
+# l = {} deg, \n\
+# \n\
 # R_odot [kpc] = {}, \n\
 # R_max [kpc] = {} kpc\n\
 # rho_s [GeV cm^-3] = {}\n\
 # r_s [kpc] = {}\n\
 # g_chi [MeV^-1] = {}\n\
-# g_A = {}\n\
-# GT = {}\n#\n".format(b_min, b_max, R_odot, R_max*r_s, rho_s, r_s, g_chi/energyScale, g_A, GT)
-    with open(filename, 'w') as fp:
-        fp.write(metadata)
-    dat = {'l [deg]': [*ells1, *ells2], 'Differential flux [cm^-2 s^-1 MeV^-1 rad^-1]': bInt}
-    df = pd.DataFrame(dat)
-    df.to_csv(filename, sep='\t', index=False, mode='a')
-    ################
-    
-    return (integral1[-1] * np.pi/180, integral2[-1] * np.pi/180) # ([rad * rad], [rad * rad])
+# g_A = {}\n#\n".format(m_chi*energyScale, nucleus, m_n*energyScale, J_n, dE*energyScale, GT, l, R_odot, R_max*r_s, rho_s, r_s, g_chi/energyScale, g_A)
+        with open(filename, 'w') as fp:
+            fp.write(metadata)
+        dat = {'# b [deg]': bees, 'Differential flux [cm^-2 s^-1 MeV^-1 sr^-1]': diffFluxNoConv}
+        df = pd.DataFrame(dat)
+        df.to_csv(filename, sep='\t', index=False, mode='a')
+        ################
+        
 
-
-def solid_angle_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, b_min, b_max, l_min1, l_max1, l_min2, l_max2, integratedSolidAngle, R_max, epsilon):
-    """
-    returns: [unitless] solid-angle-averaged flux integrated over:
-        galactic latitude from b_min to b_max
-        galactic longitude from l_min1 to l_max1
-        galactic longitude from l_min2 to l_max2 
-    ****************
-    g_chi: [unitless, in units of 1/energyScale] DM-nucleus coupling constant
-    m_chi: [unitless, in units of energyScale] DM mass
-    nucleus: 'C12' or 'O16'
-    m_n: [unitless, in units of energyScale] nucleus mass
-    J_n: [unitless] nucleus spin
-    dE: [unitless, in units of energyScale] excitation energy
-    GT: [unitless] GT strength for excitation energy dE
-    b_min: [deg] lower integral bound for galactic latitude
-    b_max: [deg] upper integral bound for galactic latitude
-    l_min1: [deg] lower bound for first galactic longitude integral
-    l_max1: [deg] upper bound for first galactic longitude integral
-    l_min2: [deg] lower bound for second galactic longitude integral
-    l_max2: [deg] upper bound for second galactic longitude integral
-    R_max: [unitless, in units of r_s] maximum galactic radius
-    epsilon: [unitless] energy resolution
-    """
-    
-    # observed photon energy spectrum; currently using 1 sigma:
-    energy = np.linspace((dE - 1 * epsilon * dE), (dE + 1 * epsilon * dE), 11) # [unitless, in units of energyScale]
-    # for testing:
-    # [nuc_dict['C12']['dEs [MeV]'][0]/energyScale] # [unitless, in units of energyScale]
-    energyMeV = [EE * energyScale for EE in energy] # [MeV] used for datafile
-    
-    integratedFlux1, integratedFlux2 = [], []
-    integratedFlux = []
-    
-    for E in energy: # [unitless, in units of energyScale]
-        tic = time.time()
-        print("    observed photon energy = {} MeV".format(E*energyScale))
-        intFlux1, intFlux2 = l_integral(g_chi, m_chi, nucleus, m_n, J_n, dE, GT, \
-                                        b_min, b_max, l_min1, l_max1, l_min2, l_max2, R_max, epsilon, E) # [rad * rad], [rad * rad]
-        integratedFlux1.append(intFlux1 * fluxFactor) # [rad * rad] * [cm^-2 s^-1 MeV^-1 sr^-1] = [cm^-2 s^-1 MeV^-1]
-        integratedFlux2.append(intFlux2 * fluxFactor) # [rad * rad] * [cm^-2 s^-1 MeV^-1 sr^-1] = [cm^-2 s^-1 MeV^-1]
-        integratedFlux.append((intFlux1 + intFlux2) * fluxFactor) # [cm^-2 s^-1 MeV^-1]
-        print("    time for one obs photon energy: {}\n".format(time.time() - tic))
-
-    #### calculate solid-angle-averaged-flux ####
-    averagedFlux = [i / integratedSolidAngle for i in integratedFlux] # [cm^-2 s^-1 MeV^-1 sr^-1]
-    ################
-    
-    #### write to file ####
-    Path("data/solid_angle_integral_data_by_dE/{}/dE_{}MeV".format(nucleus, dE*energyScale)).mkdir(parents=True, exist_ok=True)
-    filename = 'data/solid_angle_integral_data_by_dE/{}/dE_{}MeV/m_chi_{}MeV_epsilon_{}.txt'.format(nucleus, dE*energyScale, m_chi*energyScale, 100*epsilon)
-    metadata = "# Integral 1 l bounds [deg] = [{}, {}], \n\
-# Integral 2 l bounds [deg] = [{}, {}], \n\
-# b range [deg] = [{}, {}], \n\
-# R_odot [kpc] = {}, \n\
-# R_max [kpc] = {} kpc\n\
-# rho_s [GeV cm^-3] = {}\n\
-# r_s [kpc] = {}\n\
-# g_chi [MeV^-1] = {}\n\
-# g_A = {}\n\
-# GT = {}\n#\n".format(l_min1, l_max1, l_min2, l_max2, b_min, b_max, R_odot, R_max*r_s, rho_s, r_s, g_chi/energyScale, g_A, GT)
-    with open(filename, 'w') as fp:
-        fp.write(metadata)
-    dat = {'Photon energy [MeV]': energyMeV, 'Solid-angle-averaged flux [cm^-2 s^-1 MeV^-1 sr^-1]': averagedFlux, 'Integrated flux [cm^-2 s^-1 MeV^-1]': integratedFlux, \
-           'Integral 1 [cm^-2 s^-1 MeV^-1]': integratedFlux1, 'Integral 2 [cm^-2 s^-1 MeV^-1]': integratedFlux2}
-    df = pd.DataFrame(dat)
-    df.to_csv(filename, sep='\t', index=False, mode='a') 
-    ################
-
-
-if __name__=="__main__":
-#def main():
+if __name__=="__main__":        
+# def main_no_conv():
     nucleus = 'C12'
     g_chi = 1 # [MeV^-1]
     R_max = 50.0 # [kpc]
-    epsilon = 0.05 # [unitless]
+    # epsilon = 0.05 # [unitless]
     m_n, J_n = nuc_dict[nucleus]['mass [unitless]'], nuc_dict[nucleus]['spin'] # [unitless, in units of energyScale], [unitless]
+    
     l_min1, l_max1 = 330.25, ls[-1] # [deg], [deg]; bounds for first galactic longitude integral
     l_min2, l_max2 = ls[0], 29.75 # [deg], [deg]; bounds for second galactic longitude integral
     b_min, b_max = -4.75, 4.75 # [deg], [deg]; bounds for galactic latitude integral
-
-    #### integrate solid angle, for calculating solid-angle-averaged flux ####
-    def f(b, l):
-        integrand = np.sin(b * np.pi/180 + np.pi/2)
-        return integrand # [unitless]
-        
-    integratedSolidAngle1 = dblquad(f, l_min1, l_max1, b_min, b_max)[0] * np.pi/180 * np.pi/180 # [sr]
-    integratedSolidAngle2 = dblquad(f, l_min2, l_max2, b_min, b_max)[0] * np.pi/180 * np.pi/180 # [sr]
-    integratedSolidAngle = integratedSolidAngle1 + integratedSolidAngle2 # [sr]
-    print("integrated solid angle (flux denominator): {} sr".format(integratedSolidAngle))
-    ################
     
     print(nucleus)
-    for dE in nuc_dict[nucleus]['dEs [MeV]'][5:80:10]: # for now, only go to 80 for C12, 75 for O16
+    for dE in nuc_dict[nucleus]['dEs [MeV]'][0:33:4]:
+        # comptel data only goes to 30 MeV: 
+            # nuc_dict['C12']['dEs [MeV]'][32] < 30 MeV
+            # nuc_dict['O16']['dEs [MeV]'][37] < 30 MeV
+        # beyond 30 MeV, for now only go to 80 for C12, 75 for O16; at 80 & 75 need to account for both C and O being excited by the same mass
         i = list(nuc_dict[nucleus]['dEs [MeV]']).index(dE)
         GT = nuc_dict[nucleus]['GTs'][i] # [unitless]
         print("i = {}:    dE = {} MeV, GT = {}".format(i, dE, GT))
@@ -892,13 +735,13 @@ if __name__=="__main__":
         mass_by_dE_data = 'optimal_m_chis_by_dE/{}/{}_optimal_m_chis_dE_{}_MeV.txt'.format(nucleus, nucleus, dE)
         mass_by_dE_df = pd.read_csv(mass_by_dE_data, sep='\t', names=['Radius from GC [kpc]', 'Optimal DM mass [MeV]'], skiprows=1)
         M_CHIS = mass_by_dE_df['Optimal DM mass [MeV]']
-        dm = (np.max(M_CHIS) - np.min(M_CHIS))/2
-        m_chis = np.linspace(np.min(M_CHIS) - dm, np.max(M_CHIS) + dm, 5)
+        # delta_m = (np.max(M_CHIS) - np.min(M_CHIS)) # for all dEs, delta_m =~ 0.0038
+        # m_chis = np.arange(np.min(M_CHIS) - 0.004, dE, 1e-3) #  np.arange(np.min(M_CHIS) - 0.004, dE, 1e-3) this seems to work well
+        m_chis = list(dict.fromkeys(M_CHIS)) # convert to dictionary & back to list to remove any duplicates
 
-        for m_chi in m_chis:
-            print("    m_chi = {} MeV".format(m_chi))
-            tic = time.time()
-            solid_angle_integral(g_chi*energyScale, m_chi/energyScale, nucleus, m_n, J_n, dE/energyScale, GT, b_min, b_max, l_min1, l_max1, l_min2, l_max2, integratedSolidAngle, R_max/r_s, epsilon)
-            print("    time for 1 mass: {}".format(time.time() - tic))
-
-#main()
+        for m_chi in m_chis: #M_CHIS[0:-1:5]:#[9, 9.8, 9.84, 9.841, 9.841229812573143, 9.842, 9.842268692851082, 9.845, 9.845010437998493]:
+            print("m_chi = {} MeV".format(m_chi))
+            write_diff_flux_to_file(g_chi*energyScale, m_chi/energyScale, nucleus, m_n, J_n, dE/energyScale, GT, b_min, b_max, l_min1, l_max1, l_min2, l_max2, R_max/r_s)
+        print("\n")
+        
+# main_no_conv()
